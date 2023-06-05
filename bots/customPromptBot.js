@@ -1,14 +1,8 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-const request = require('request');
-// const url = 'https://voyageprive.atlassian.net/rest/api/2/issue/RED-8';
-const { ActivityHandler } = require('botbuilder');
-const url = 'https://voyageprive.atlassian.net/rest/api/2/issue';
-const auth = {
-    username: 'qdesgardin@voyageprive.com',
-    pass: 'ATATT3xFfGF0LHIxMaaMpIyxWPcXPWu6SkygA9xdfdzktO7n5i5vMy85Red0frnNPDOvP_KxyJKaTMBhynIFcCrNg9Fo_1ATUXH8dhMe6oOu-owaI403kmfmxI1Cyswen6zepdordcw4xscPBV-a2scUxgO7wu-6dzV3sdu6J80Y7fXTHHoy73A=A0DC77FD'
-};
+const TaskFactory = require('./tasks/taskFactory');
+const { ActivityHandler, MessageFactory } = require('botbuilder');
 
 // The accessor names for the conversation flow and user profile state property accessors.
 const CONVERSATION_FLOW_PROPERTY = 'CONVERSATION_FLOW_PROPERTY';
@@ -30,6 +24,21 @@ const question = {
     none: 'none'
 };
 
+const TASKS = {
+    retrieveTicket: {
+        id: 1,
+        name: 'Retrieve Jira ticket informations',
+        class: 'retrieveTicket',
+    },
+    sendTicket: {
+        id: 2,
+        name: 'Post a ticket',
+        class: 'sendTicket',
+    }
+};
+
+const RESET_KEYWORD = 'reset';
+
 // Defines a bot for filling a user profile.
 class CustomPromptBot extends ActivityHandler {
     constructor(conversationState, userState) {
@@ -43,11 +52,33 @@ class CustomPromptBot extends ActivityHandler {
         this.userState = userState;
 
         this.onMessage(async (turnContext, next) => {
-            const flow = await this.conversationFlow.get(turnContext, { lastQuestionAsked: question.none });
+            const flow = await this.conversationFlow.get(turnContext, { step: 0 });
             const profile = await this.userProfile.get(turnContext, {});
+            
+            if (turnContext.activity.text.trim().toLocaleLowerCase() === RESET_KEYWORD) {
+                flow = null;
+            }
 
-            await CustomPromptBot.fillOutUserProfile(flow, profile, turnContext);
+            if (!flow.task) {
+                await CustomPromptBot.selectTask(flow, profile, turnContext);
+            } else {
+                await CustomPromptBot.process(flow, profile, turnContext);
+            }
 
+            // By calling next() you ensure that the next BotHandler is run.
+            await next();
+        });
+
+        this.onMembersAdded(async (context, next) => {
+            const membersAdded = context.activity.membersAdded;
+            const welcome = 'Hello ! I\'m the support bot. I\'m here to help you to get answers.';
+            const selectTask = CustomPromptBot.getInitialMessage();
+            for (let cnt = 0; cnt < membersAdded.length; ++cnt) {
+                if (membersAdded[cnt].id !== context.activity.recipient.id) {
+                    await context.sendActivity(MessageFactory.text(welcome, welcome));
+                    await context.sendActivity(MessageFactory.text(selectTask, selectTask));
+                }
+            }
             // By calling next() you ensure that the next BotHandler is run.
             await next();
         });
@@ -62,172 +93,69 @@ class CustomPromptBot extends ActivityHandler {
         await this.userState.saveChanges(context, false);
     }
 
-    static async fillOutUserProfile(flow, profile, turnContext) {
+    /**
+     * 
+     * @param {*} flow 
+     * @param {*} profile 
+     * @param {*} turnContext 
+     * @returns 
+     */
+    static async selectTask(flow, profile, turnContext) {
         const input = turnContext.activity.text;
-        let result;
-        switch (flow.lastQuestionAsked) {
-        case question.none:
-            await turnContext.sendActivity('With which application do you meet a problem ?');
-            flow.lastQuestionAsked = question.application;
-            break;
+        let task = Object.values(TASKS).find(taskConf => taskConf.id == input);
+        if (!task) {
+            await turnContext.sendActivity(`I have no functionnality named "${input}"`);
+            return;
+        }
 
-        case question.application:
-            result = this.validateApplicationName(input);
-            if (result.success) {
-                profile.application = result.application;
-                await turnContext.sendActivity(`I have your application name ${ profile.application }.`);
-                await turnContext.sendActivity('Can you tel me the Subject of the issue ?');
-                flow.lastQuestionAsked = question.issue;
-                break;
-            } else {
-                await turnContext.sendActivity(result.message || "I'm sorry, I didn't understand that.");
-                break;
-            }
+        flow.task = task.class;
+        try {
+            task = new TaskFactory(flow.task);
+        } catch (e) {
+            await turnContext.sendActivity(`I have no functionnality named "${input}"`);
+        }
+        
+        const messages = task.getFirstStepMessages();
+        for (let i = 0; i < messages.length; i++) {
+            await turnContext.sendActivity(messages[i]);
+        }
+    }
 
-        case question.issue:
-            result = this.validateStep(input, question.issue);
-            if (result.success) {
-                profile.issue = result.issue;
-                await turnContext.sendActivity('I have your saved issue.');
-                await turnContext.sendActivity('What is the impact for our business ?');
-                flow.lastQuestionAsked = question.businessImpact;
-                break;
-            } else {
-                await turnContext.sendActivity(result.message || "I'm sorry, I didn't understand that.");
-                break;
-            }
+    /**
+     * Process dialog
+     *
+     * @param {*} Context
+     * @param {*} profile Result data
+     * @param {*} turnContext Object of dialog that contains input and send text
+     * 
+     */
+    static async process(flow, profile, turnContext) {
+        const input = turnContext.activity.text;
 
-        case question.businessImpact:
-            result = this.validateStep(input, question.businessImpact);
-            if (result.success) {
-                profile.businessImpact = result.businessImpact;
-                await turnContext.sendActivity('I have saved your answer about impact business.');
-                await turnContext.sendActivity('What BU are concerned about your problem ?');
-                flow.lastQuestionAsked = question.bu;
-                break;
-            } else {
-                await turnContext.sendActivity(result.message || "I'm sorry, I didn't understand that.");
-                break;
-            }
-        case question.bu:
-            result = this.validateStep(input, question.bu);
-            if (result.success) {
-                profile.bu = result.bu;
-                await turnContext.sendActivity('I have saved your answer about bu.');
-                await turnContext.sendActivity('Can you give me a reference Id (Bong/PIM/TURBO/BONG...) ?');
-                flow.lastQuestionAsked = question.refId;
-                break;
-            } else {
-                await turnContext.sendActivity(result.message || "I'm sorry, I didn't understand that.");
-                break;
-            }
+        let task;
+        try {
+            task = new TaskFactory(flow.task);
+        } catch (e) {
+            await turnContext.sendActivity(`I have no functionnality named "${input}"`);
+        }
 
-        case question.refId:
-            result = this.validateStep(input, question.refId);
-            if (result.success) {
-                profile.refId = result.refId;
-                await turnContext.sendActivity('Thanks for this Ref Id.');
-                await turnContext.sendActivity('How often do you reproduce this issue? Is it an isolated case ?');
-                flow.lastQuestionAsked = question.often;
-                break;
-            } else {
-                await turnContext.sendActivity(result.message || "I'm sorry, I didn't understand that.");
-                break;
-            }
+        const result = task.processStep(flow.step, input);
+        for (let i = 0; i < result.messages.length; i++) {
+            await turnContext.sendActivity(result.messages[i]);
+        }
 
-        case question.often:
-            result = this.validateStep(input);
-            if (result.success) {
-                profile.often = result.often;
-                await turnContext.sendActivity('Thanks for this reply.');
-                await turnContext.sendActivity('Description of the issue (precise dates/offers or links)');
-                flow.lastQuestionAsked = question.description;
-                break;
-            } else {
-                await turnContext.sendActivity(result.message || "I'm sorry, I didn't understand that.");
-                break;
-            }
+        if (result.success) {
+            Object.assign(profile, result.data);
+        }
 
-        case question.description:
-            result = this.validateStep(input, question.description);
-            if (result.success) {
-                profile.description = result.description;
-                await turnContext.sendActivity('Thanks for this reply.');
-                await turnContext.sendActivity('How can we reproduce this issue? (Please explain all necessary steps to reproduce): ');
-                flow.lastQuestionAsked = question.reproduce;
-                break;
-            } else {
-                await turnContext.sendActivity(result.message || "I'm sorry, I didn't understand that.");
-                break;
-            }
-
-        case question.reproduce:
-            result = this.validateStep(input, question.reproduce);
-            if (result.success) {
-                profile.reproduce = result.reproduce;
-                await turnContext.sendActivity('Thanks for this reply.');
-                await turnContext.sendActivity('Have you asked your teammates first?');
-                flow.lastQuestionAsked = question.askTeamMate;
-                break;
-            } else {
-                await turnContext.sendActivity(result.message || "I'm sorry, I didn't understand that.");
-                break;
-            }
-
-        case question.askTeamMate:
-            result = this.validateStep(input, question.askTeamMate);
-            if (result.success) {
-                profile.askTeamMate = result.askTeamMate;
-                await turnContext.sendActivity('Thanks for this reply.');
-                await turnContext.sendActivity('Which setup checks have been done or actions (indexation, check with APA in charge...) ?');
-                flow.lastQuestionAsked = question.setup;
-                profile = {};
-                break;
-            } else {
-                await turnContext.sendActivity(result.message || "I'm sorry, I didn't understand that.");
-                break;
-            }
-
-        case question.setup:
-            result = this.validateStep(input, question.setup);
-            if (result.success) {
-                profile.setup = result.setup;
-                await turnContext.sendActivity('Thanks for this reply.');
-                flow.lastQuestionAsked = question.none;
-                console.log(profile);
-                // profile = {};
-                const createIssue = {
-                    fields: {
-                        project: {
-                            key: 'RED'
-                        },
-                        summary: profile.issue,
-                        issuetype: {
-                            name: 'Bug'
-                        },
-                        description: JSON.stringify(profile)
-                    }
-                };
-
-                request.post({
-                    url,
-                    auth,
-                    body: JSON.stringify(createIssue),
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                }, (error, response, body) => {
-                    if (error) {
-                        console.error(error);
-                        return;
-                    }
-                    console.log(body);
-                });
-                break;
-            } else {
-                await turnContext.sendActivity(result.message || "I'm sorry, I didn't understand that.");
-                break;
-            }
+        if (task.isFinalStep(flow.step)) {   
+            console.log("LALAAL");         
+            const finalStepData = await task.finalize(profile);
+            await turnContext.sendActivity(`${ finalStepData.message }`);
+            await turnContext.sendActivity(CustomPromptBot.getInitialMessage());
+            flow.task = flow.step = null;
+        } else {
+            flow.step = result.step;
         }
 
         // request.get({ url, auth, json: true }, (error, response, body) => {
@@ -259,31 +187,14 @@ class CustomPromptBot extends ActivityHandler {
         // });
     }
 
-    // Validates name input. Returns whether validation succeeded and either the parsed and normalized
-    // value or a message the bot can use to ask the user again.
-    static validateApplicationName(input) {
-        const applicationNameList = [
-            'turbo',
-            'bong',
-            'turbo',
-            'ozone',
-            'lemon',
-            'pomelo',
-            'strawberry',
-            'plum'
-        ];
-        let name = input;
-        name = name.trim().toLowerCase();
-
-        if (applicationNameList.includes(name)) {
-            return { success: true, application: name };
-        } else {
-            return { success: false, message: 'Please enter a name that contains at least one character.' };
-        }
-    };
-
-    static validateStep(input, step) {
-        return { success: true, [step]: input };
+    /**
+     * Get initial conversation message
+     *
+     * @returns {string}
+     */
+    static getInitialMessage() {
+        return 'You can select one of the following option: \n'
+            .concat(Object.values(TASKS).map(task => ` - (${ task.id }) ${ task.name }`).join('\n'));
     }
 }
 

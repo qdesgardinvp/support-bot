@@ -1,0 +1,79 @@
+[
+    {
+        "id": 0,
+        "key": "application",
+        "text": "With which application do you meet a problem ?",
+        "validationFunc": "validateApplicationName",
+        "title": "Application"
+    },
+    {
+        "id": 1,
+        "key": "issue",
+        "text": "Can you tell me the Subject of the issue ?",
+        "validationFunc": "validateString",
+        "title": "Subject of the issue"
+    },
+    {
+        "id": 2,
+        "key": "businessImpact",
+        "text": "What is the impact for our business ?",
+        "validationFunc": "validateString",
+        "title": "Impact for Business"
+    },
+    {
+        "id": 3,
+        "key": "bu",
+        "text": "What BU are concerned about your problem ?",
+        "validationFunc": "validateString",
+        "title": "BU"
+    },
+    {
+        "id": 4,
+        "key": "refId",
+        "text": "Can you give me a reference Id (Bong/PIM/TURBO/BONG...) ?",
+        "validationFunc": "validateString",
+        "title": "Reference id"
+    },
+    {
+        "id": 5,
+        "key": "often",
+        "text": "How often do you reproduce this issue? Is it an isolated case ?",
+        "validationFunc": "validateString",
+        "title": "How often do you reproduce this issue? Is it an isolated case ?"
+    },
+    {
+        "id": 6,
+        "key": "description",
+        "text": "Description of the issue (precise dates/offers or links)",
+        "validationFunc": "validateString",
+        "title": "Description of the issue"
+    },
+    {
+        "id": 7,
+        "key": "expected",
+        "text": "Expected result",
+        "validationFunc": "validateString",
+        "title": "Expected result :"
+    },
+    {
+        "id": 8,
+        "key": "reproduce",
+        "text": "How can we reproduce this issue? (Please explain all necessary steps to reproduce): ",
+        "validationFunc": "validateString",
+        "title": "How could we reproduce this issue? (Please explain all necessary steps to reproduce)"
+    },
+    {
+        "id": 9,
+        "key": "askTeamMate",
+        "text": "Have you asked your teammates first ? (If they already had the issue and how could-you resolve it?)",
+        "validationFunc": "validateString",
+        "title": "Have you asked your teammates first ?"
+    },
+    {
+        "id": 10,
+        "key": "setup",
+        "text": "Which setup checks have been done or actions (indexation, check with APA in charge...) ?",
+        "validationFunc": "validateString",
+        "title": "Which setup checks have been done or actions ?"
+    }
+]
