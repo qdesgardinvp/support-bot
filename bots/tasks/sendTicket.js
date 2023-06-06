@@ -1,12 +1,8 @@
 const request = require('request');
 const fs = require('fs');
 const Task = require('./task');
-
-const url = 'https://voyageprive.atlassian.net/rest/api/2/issue';
-const auth = {
-    username: 'qdesgardin@voyageprive.com',
-    pass: 'ATATT3xFfGF0LHIxMaaMpIyxWPcXPWu6SkygA9xdfdzktO7n5i5vMy85Red0frnNPDOvP_KxyJKaTMBhynIFcCrNg9Fo_1ATUXH8dhMe6oOu-owaI403kmfmxI1Cyswen6zepdordcw4xscPBV-a2scUxgO7wu-6dzV3sdu6J80Y7fXTHHoy73A=A0DC77FD'
-};
+const { IncomingWebhook } = require('ms-teams-webhook');
+require('dotenv').config();
 
 const TASK_NAME = 'sendTicket';
 const APP_NAME_LIST = [
@@ -49,7 +45,7 @@ class SendTicket extends Task {
 
         return {
             ...result,
-            data: {[step.key]: this.formatResultData(input, step)},
+            data: {[step.key]: input},
             step: (result.success ? step.id+1 : step.id),
         };
     }
@@ -62,11 +58,18 @@ class SendTicket extends Task {
      * @returns {Promise}
      */
     finalize(data) {
-        // uncomment to get the real jira ticket
-        return {
-            success: true,
-            message: 'JIRA ticket ID: TEST'
-        };
+        // Used to test webhook without JIRA
+        if (!+process.env.ENABLE_JIRA && +process.env.ENABLE_TEAMS_WEBHOOK) {
+            this.sendWebhookTeams(data);
+        }
+
+        if (!+process.env.ENABLE_JIRA) {
+            return {
+                success: true,
+                message: 'JIRA ticket ID: TEST'
+            };
+        }
+
         const createIssue = {
             fields: {
                 project: {
@@ -82,8 +85,11 @@ class SendTicket extends Task {
 
         return new Promise((resolve, reject) => {
             request.post({
-                url,
-                auth,
+                url: process.env.JIRA_URL,
+                auth: {
+                    username: process.env.JIRA_USER,
+                    pass: process.env.JIRA_PASSWORD,
+                },
                 body: JSON.stringify(createIssue),
                 headers: {
                     'Content-Type': 'application/json'
@@ -97,6 +103,10 @@ class SendTicket extends Task {
                     });
                 }
 
+                if (+process.env.ENABLE_TEAMS_WEBHOOK) {
+                    this.sendWebhookTeams(data);
+                }
+
                 body = JSON.parse(body);
                 resolve({
                     success: true,
@@ -104,6 +114,35 @@ class SendTicket extends Task {
                 });
             });
         });
+    }
+
+    /**
+     * Create a Teams conversation => result of jira ticket 
+     *
+     * @param {object} data Result of conversation
+     * @param {number} jiraId
+     */
+    sendWebhookTeams(data, jiraId) {
+        const webhook = new IncomingWebhook(process.env.TEAMS_WEBHOOK_URL);
+
+        (async () => {
+            await webhook.send({
+              "@type": "MessageCard",
+              "@context": "https://schema.org/extensions",
+              summary: jiraId || "RED-XXX",
+              themeColor: "0078D7",
+              title: `Issue opened: "${ data['issue'] }"`,
+              sections: [
+                {
+                  activityTitle: "RED squad",
+                  activitySubtitle: (new Date()).toLocaleString('fr-FR'),
+                  activityImage:
+                    "https://connectorsdemo.azurewebsites.net/images/MSC12_Oscar_002.jpg",
+                  text: "test1",
+                },
+              ],
+            });
+          })();
     }
 
     /**
@@ -126,7 +165,9 @@ class SendTicket extends Task {
      * @returns {string}
      */
     formatTicketDescription(data) {
-        return Object.values(data).reduce((final, stepResult) => `${ final } \n ${ stepResult }`);
+        return Object.keys(data).map(dataKey => 
+            this.formatResultData(data[dataKey], this.steps.find(step => step.key == dataKey))
+        ).reduce((final, stepResult) => `${ final } \n ${ stepResult }`);
     }
 
     /**

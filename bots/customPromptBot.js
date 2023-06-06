@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
+require('dotenv').config();
 const TaskFactory = require('./tasks/taskFactory');
 const { ActivityHandler, MessageFactory } = require('botbuilder');
 
@@ -149,7 +150,6 @@ class CustomPromptBot extends ActivityHandler {
         }
 
         if (task.isFinalStep(flow.step)) {   
-            console.log("LALAAL");         
             const finalStepData = await task.finalize(profile);
             await turnContext.sendActivity(`${ finalStepData.message }`);
             await turnContext.sendActivity(CustomPromptBot.getInitialMessage());

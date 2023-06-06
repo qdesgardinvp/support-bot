@@ -16,6 +16,7 @@
         "botbuilder": "~4.17.0",
         "dotenv": "^8.2.0",
         "jira-connector": "^3.1.0",
+        "ms-teams-webhook": "^2.0.2",
         "npm-watch": "^0.11.0",
         "request": "^2.88.2",
         "restify": "~8.6.0"
