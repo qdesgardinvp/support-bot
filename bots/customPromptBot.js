@@ -9,32 +9,16 @@ const { ActivityHandler, MessageFactory } = require('botbuilder');
 const CONVERSATION_FLOW_PROPERTY = 'CONVERSATION_FLOW_PROPERTY';
 const USER_PROFILE_PROPERTY = 'USER_PROFILE_PROPERTY';
 
-// Identifies the last question asked.
-const question = {
-    application: 'application',
-    issue: 'issue',
-    businessImpact: 'businessImpact',
-    bu: 'bu',
-    refId: 'refId',
-    often: 'often',
-    description: 'description',
-    example: 'example',
-    reproduce: 'reproduce',
-    askTeamMate: 'askTeamMate',
-    setup: 'setup',
-    none: 'none'
-};
-
 const TASKS = {
-    retrieveTicket: {
+    retrieveIssue: {
         id: 1,
-        name: 'Retrieve Jira ticket informations',
-        class: 'retrieveTicket',
+        name: 'Retrieve Jira issue informations',
+        class: 'retrieveIssue',
     },
-    sendTicket: {
+    sendIssue: {
         id: 2,
-        name: 'Post a ticket',
-        class: 'sendTicket',
+        name: 'Post an issue',
+        class: 'sendIssue',
     }
 };
 
@@ -53,17 +37,19 @@ class CustomPromptBot extends ActivityHandler {
         this.userState = userState;
 
         this.onMessage(async (turnContext, next) => {
-            const flow = await this.conversationFlow.get(turnContext, { step: 0 });
+            let flow = await this.conversationFlow.get(turnContext, { step: 0 });
             const profile = await this.userProfile.get(turnContext, {});
             
             if (turnContext.activity.text.trim().toLocaleLowerCase() === RESET_KEYWORD) {
-                flow = null;
-            }
-
-            if (!flow.task) {
-                await CustomPromptBot.selectTask(flow, profile, turnContext);
+                flow.task = null;
+                flow.step = 0;
+                await turnContext.sendActivity(CustomPromptBot.getInitialMessage());
             } else {
-                await CustomPromptBot.process(flow, profile, turnContext);
+                if (!flow.task) {
+                    await CustomPromptBot.selectTask(flow, profile, turnContext);
+                } else {
+                    await CustomPromptBot.process(flow, profile, turnContext);
+                }
             }
 
             // By calling next() you ensure that the next BotHandler is run.
@@ -105,7 +91,7 @@ class CustomPromptBot extends ActivityHandler {
         const input = turnContext.activity.text;
         let task = Object.values(TASKS).find(taskConf => taskConf.id == input);
         if (!task) {
-            await turnContext.sendActivity(`I have no functionnality named "${input}"`);
+            await turnContext.sendActivity(`Please select a valid proposition "${input}"`);
             return;
         }
 
@@ -113,7 +99,8 @@ class CustomPromptBot extends ActivityHandler {
         try {
             task = new TaskFactory(flow.task);
         } catch (e) {
-            await turnContext.sendActivity(`I have no functionnality named "${input}"`);
+            await turnContext.sendActivity('This functionnality is not ready yet');
+            return;
         }
         
         const messages = task.getFirstStepMessages();
@@ -149,42 +136,20 @@ class CustomPromptBot extends ActivityHandler {
             Object.assign(profile, result.data);
         }
 
-        if (task.isFinalStep(flow.step)) {   
-            const finalStepData = await task.finalize(profile);
+        if (task.isFinalStep(flow.step)) {
+            let finalStepData;
+            try {
+                finalStepData = await task.finalize(profile);
+            } catch (e) {
+                finalStepData = e;
+            }
+
             await turnContext.sendActivity(`${ finalStepData.message }`);
             await turnContext.sendActivity(CustomPromptBot.getInitialMessage());
             flow.task = flow.step = null;
         } else {
             flow.step = result.step;
         }
-
-        // request.get({ url, auth, json: true }, (error, response, body) => {
-        //     if (error) {
-        //         console.error(error);
-        //         return;
-        //     }
-        //     console.log(body);
-        // });
-
-        // {
-        //     application: 'turbo',
-        //     issue: 'test',
-        //     businessImpact: 'test',
-        //     bu: 'test',
-        //     refId: 'test',
-        //     description: 'test',
-        //     reproduce: 'test',
-        //     askTeamMate: 'test',
-        //     setup: 'test'
-        //   }
-
-        // request.get({ url, auth, json: true }, (error, response, body) => {
-        //     if (error) {
-        //         console.error(error);
-        //         return;
-        //     }
-        //     console.log(body);
-        // });
     }
 
     /**
@@ -193,8 +158,14 @@ class CustomPromptBot extends ActivityHandler {
      * @returns {string}
      */
     static getInitialMessage() {
-        return 'You can select one of the following option: \n'
-            .concat(Object.values(TASKS).map(task => ` - (${ task.id }) ${ task.name }`).join('\n'));
+        const tasks = TASKS;
+        tasks['reset'] = {id: 'reset', name: 'Reset the conversation'};
+
+        return 'You can select one of the following option \n '
+            .concat(Object.values(tasks)
+                .filter(task => !task.hidden)
+                .map(task => ` - (${ task.id }) ${ task.name }`)
+                .join('\n'));
     }
 }
 
