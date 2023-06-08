@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 require('dotenv').config();
-const TaskFactory = require('./tasks/taskFactory');
+const TaskFactory = require('../domain/factories/taskFactory');
 const { ActivityHandler, MessageFactory } = require('botbuilder');
 
 // The accessor names for the conversation flow and user profile state property accessors.
