@@ -1,0 +1,9 @@
+[
+    {
+        "id": 0,
+        "key": "issueId",
+        "text": "Please provide me a JIRA issue ID",
+        "validationFunc": "validateJiraIssue",
+        "title": "issueId"
+    }
+]
