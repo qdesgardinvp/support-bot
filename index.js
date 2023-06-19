@@ -20,7 +20,7 @@ const {
 } = require('botbuilder');
 
 // This bot's main dialog.
-const { CustomPromptBot } = require('./bots/customPromptBot');
+const { CustomPromptBot } = require('./bots/application/customPromptBot');
 
 // Create HTTP server
 const server = restify.createServer();

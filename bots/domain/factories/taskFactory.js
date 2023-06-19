@@ -1,5 +1,5 @@
-const { SendIssue, TASK_NAME: SEND_ISSUE } = require('./sendIssue');
-const { RetrieveIssue, TASK_NAME: RETRIEVE_ISSUE } = require('./retrieveIssue');
+const { SendIssue, TASK_NAME: SEND_ISSUE } = require('../sendIssue/sendIssue');
+const { RetrieveIssue, TASK_NAME: RETRIEVE_ISSUE } = require('../retrieveIssue/retrieveIssue');
 
 class TaskFactory {
     constructor(taskName) {

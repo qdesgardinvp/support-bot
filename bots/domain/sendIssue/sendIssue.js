@@ -1,7 +1,7 @@
 require('dotenv').config();
 const request = require('request');
 const fs = require('fs');
-const Task = require('./task');
+const Task = require('../task');
 const { IncomingWebhook } = require('ms-teams-webhook');
 
 const TASK_NAME = 'sendIssue';
@@ -22,7 +22,7 @@ class SendIssue extends Task {
     constructor() {
         super();
 
-        this.steps = JSON.parse(fs.readFileSync('bots/resources/sendIssueSteps.json', 'utf8'))
+        this.steps = JSON.parse(fs.readFileSync('bots/domain/sendIssue/sendIssueSteps.json', 'utf8'))
             .sort((a, b) => a.id - b.id);
         this.description = 'Answer a few questions to create a JIRA issue';
     }

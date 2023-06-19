@@ -1,7 +1,7 @@
 require('dotenv').config();
 const request = require('request');
 const fs = require('fs');
-const Task = require("./task");
+const Task = require("../task");
 const IssueDetails = require('./issueDetails');
 
 const TASK_NAME = 'retrieveIssue';
@@ -10,7 +10,7 @@ class RetrieveIssue extends Task {
     constructor() {
         super();
 
-        this.steps = JSON.parse(fs.readFileSync('bots/resources/retrieveIssueSteps.json', 'utf8'))
+        this.steps = JSON.parse(fs.readFileSync('bots/domain/retrieveIssue/retrieveIssueSteps.json', 'utf8'))
             .sort((a, b) => a.id - b.id);
         this.description = 'Answer a few questions to create a JIRA issue';
     }
