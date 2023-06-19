@@ -19,7 +19,7 @@
         "ms-teams-webhook": "^2.0.2",
         "npm-watch": "^0.11.0",
         "request": "^2.88.2",
-        "restify": "~8.6.0"
+        "restify": "~11.1.0"
     },
     "devDependencies": {
         "eslint": "^7.0.0",
